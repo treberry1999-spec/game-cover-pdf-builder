@@ -143,21 +143,41 @@ def normkey(x):
     x=x.replace("_"," ").replace("-"," ")
     return re.sub(r"[^a-z0-9]+","",x.lower())
 
+def repo_slug(d):
+    return d.replace(" - ","_-_").replace(" ","_")
+
 def load_index(d):
     if d in INDEXES: return INDEXES[d]
-    u=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"
+    names=[]
+    slug=repo_slug(d)
     try:
-        r=S.get(u,timeout=30); r.raise_for_status()
-        names=[urllib.parse.unquote(x) for x in re.findall(r'href="([^"]+\.png)"',r.text,re.I)]
-        INDEXES[d]=set(names)
-        lu={}
-        for n in names:
-            k=normkey(n)
-            if k: lu.setdefault(k,[]).append(n)
-        INDEX_LOOKUPS[d]=lu
+        api=f"https://api.github.com/repos/libretro-thumbnails/{slug}/git/trees/master?recursive=1"
+        j=S.get(api,timeout=30).json()
+        names=[Path(x.get("path","")).name for x in j.get("tree",[]) if x.get("path","").startswith("Named_Boxarts/") and x.get("path","").lower().endswith(".png")]
     except Exception:
-        INDEXES[d]=set(); INDEX_LOOKUPS[d]={}
+        names=[]
+    if not names:
+        u=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"
+        try:
+            r=S.get(u,timeout=30); r.raise_for_status()
+            names=[urllib.parse.unquote(x) for x in re.findall(r'href="([^"]+\.png)"',r.text,re.I)]
+        except Exception:
+            names=[]
+    INDEXES[d]=set(names)
+    lu={}
+    for n in names:
+        k=normkey(n)
+        if k: lu.setdefault(k,[]).append(n)
+    INDEX_LOOKUPS[d]=lu
     return INDEXES[d]
+
+def cover_download_urls(d,name):
+    slug=repo_slug(d)
+    q=urllib.parse.quote(name,safe="")
+    return [
+        BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+q,
+        f"https://raw.githubusercontent.com/libretro-thumbnails/{slug}/master/Named_Boxarts/{q}"
+    ]
 
 def preferred_names(row,d):
     names=load_index(d)
@@ -313,7 +333,7 @@ def fallback_actual_image(row, dest):
             j=S.get("https://en.wikipedia.org/w/api.php",params=params,timeout=10).json()
             pages=(j.get("query") or {}).get("pages") or []
             for p in pages:
-                img=(p.get("original") or p.get("thumbnail") or {}).get("source")
+                img=(p.get("thumbnail") or p.get("original") or {}).get("source")
                 if not img: continue
                 try:
                     r=S.get(img,timeout=10)
@@ -386,13 +406,14 @@ def fetch_one(row):
         names=list(preferred_names(row,d))
         if not names: names=list(fuzzy_names(row,d) or [])
         for name in names:
-            url=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+urllib.parse.quote(name,safe="")
-            try:
-                r=S.get(url,timeout=8)
-                if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
-                    dest.write_bytes(r.content); Image.open(dest).verify()
-                    return eid,str(dest),f"{d}/{name}"
-            except Exception: dest.unlink(missing_ok=True)
+            for url in cover_download_urls(d,name):
+                try:
+                    r=S.get(url,timeout=10)
+                    if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                        dest.write_bytes(r.content); Image.open(dest).verify()
+                        return eid,str(dest),f"{d}/{name}"
+                except Exception:
+                    dest.unlink(missing_ok=True)
     p,label=fallback_actual_image(row,dest)
     return eid,p,label or "physical-media-fallback"
 
