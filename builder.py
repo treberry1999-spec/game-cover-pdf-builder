@@ -370,11 +370,9 @@ def fetch_one(row):
     eid=row["entry_id"]; platform=row.get("platform","")
     dest=COVERS/(eid+".png")
     if eid in {"VG-0014","VG-0015","VG-0016"}:
-        p,label=fallback_actual_image(row,dest)
-        return eid,p,label or "vectrex-media-fallback"
+        return eid,None,"unresolved-special-case"
     if platform in SKIP_PLATFORMS or (platform not in DIR_MAP and platform!="Nintendo Switch"):
-        p,label=fallback_actual_image(row,dest)
-        return eid,p,label or "physical-media-fallback"
+        return eid,None,"unresolved-platform"
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
     exact=(row.get("cover_source_url") or "").strip()
     if exact:
@@ -422,8 +420,7 @@ def fetch_one(row):
                         return eid,str(dest),f"{d}/{name}"
                 except Exception:
                     dest.unlink(missing_ok=True)
-    p,label=fallback_actual_image(row,dest)
-    return eid,p,label or "physical-media-fallback"
+    return eid,None,"not-found"
 
 def console_image(system):
     fn=CONSOLES/(re.sub(r"[^A-Za-z0-9]+","_",system).strip("_")+".jpg")
