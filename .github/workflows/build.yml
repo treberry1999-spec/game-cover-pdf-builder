@@ -23,6 +23,14 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: pip install requests pillow reportlab rapidfuzz
+      - name: Stage cover metadata databases
+        run: |
+          curl -L --fail --retry 3 -A "Mozilla/5.0" https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json -o x360db_games.json
+          git clone --depth 1 https://github.com/niemasd/GameDB-PS3.git ps3db
+          curl -L --fail --retry 3 -A "Mozilla/5.0" 'https://www.gametdb.com/switchtdb.txt?LANG=EN' -o switchtdb.txt || true
+          curl -L --fail --retry 3 -A "Mozilla/5.0" 'https://www.gametdb.com/ps3tdb.txt?LANG=EN' -o ps3tdb.txt || true
+          ls -lh x360db_games.json switchtdb.txt ps3tdb.txt 2>/dev/null || true
+          test -d ps3db/games
       - name: Build PDFs
         run: python builder.py
       - name: List output
