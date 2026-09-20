@@ -96,8 +96,6 @@ def apply_platform_correction(row):
             row["platform"]="Nintendo Switch 2"; row["system_release_year"]="2025"
         elif t in SWITCH_TITLES:
             row["platform"]="Nintendo Switch"; row["system_release_year"]="2017"
-        elif t=="The Legend of Zelda: Ocarina of Time":
-            row["platform"]="Nintendo 64"; row["system_release_year"]="1996"; row["decade"]="1990s"
         else:
             row["platform"]="TBA"; row["system_release_year"]="9999"
     return row
@@ -252,8 +250,19 @@ def ps3_candidates(row):
     if not keys: keys=fuzzy_db_matches(row,PS3_MAP,86)
     for k in keys:
         for gid in PS3_MAP.get(k,[]):
-            for reg,typ in [("US","coverM"),("EN","coverM"),("US","cover")]:
-                yield f"https://art.gametdb.com/ps3/{typ}/{reg}/{gid}.jpg",f"GameTDB PS3 {gid} {reg}"
+            gid=gid.strip()
+            pref=[]
+            if gid.startswith(("BLUS","BCUS","NPUB","NPUA")): pref=["US","EN"]
+            elif gid.startswith(("BLES","BCES","NPEB","NPEA")): pref=["EN","US"]
+            elif gid.startswith(("BLJM","BLJS","BCJS","NPJB","NPJA")): pref=["JA","EN","US"]
+            else: pref=["US","EN","JA"]
+            regs=[]
+            for reg in pref+["FR","DE","ES","IT","AU"]:
+                if reg not in regs: regs.append(reg)
+            for reg in regs:
+                for typ in ("coverHQ","coverM","cover"):
+                    for ext in ("jpg","png"):
+                        yield f"https://art.gametdb.com/ps3/{typ}/{reg}/{gid}.{ext}",f"GameTDB PS3 {gid} {typ} {reg}"
 
 def x360_candidates(row):
     global X360_MAP
@@ -272,8 +281,13 @@ def x360_candidates(row):
     if not keys: keys=fuzzy_db_matches(row,X360_MAP,86)
     for k in keys:
         for g in X360_MAP.get(k,[]):
+            gid=(g.get("id") or "").strip()
             u=g.get("boxart")
-            if u: yield u,f"x360db {g.get('id','')}"
+            if u and str(u).startswith("http"):
+                yield u,f"x360db index {gid}"
+            if gid:
+                yield f"https://xenia-manager.github.io/x360db/titles/{gid}/artwork/boxart.jpg",f"x360db pages {gid}"
+                yield f"https://raw.githubusercontent.com/xenia-manager/x360db/main/titles/{gid}/artwork/boxart.jpg",f"x360db raw {gid}"
 
 
 def fuzzy_db_matches(row, mapping, cutoff=87):
