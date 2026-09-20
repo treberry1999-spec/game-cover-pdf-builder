@@ -44,13 +44,6 @@ jobs:
           path: output/2000s.pdf
           if-no-files-found: error
           retention-days: 7
-      - name: Upload 2010s-2020s PDF
-        uses: actions/upload-artifact@v4
-        with:
-          name: game-cover-2010s-2020s
-          path: output/2010s-2020s.pdf
-          if-no-files-found: error
-          retention-days: 7
       - name: Upload build audit
         uses: actions/upload-artifact@v4
         with:
