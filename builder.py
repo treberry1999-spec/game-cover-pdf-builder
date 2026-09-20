@@ -250,38 +250,34 @@ def ps3_candidates(row):
     global PS3_MAP
     if PS3_MAP is None:
         PS3_MAP={}
-        local=ROOT/"ps3tdb.txt"
-        if local.exists():
-            try:
-                txt=local.read_text(encoding="utf-8",errors="ignore")
-                for line in txt.splitlines():
-                    if " = " in line:
-                        gid,title=line.split(" = ",1)
-                        PS3_MAP.setdefault(normkey(title),[]).append(gid.strip().replace("-",""))
-            except Exception:
-                pass
-        games_dir=ROOT/"ps3db"/"games"
-        if games_dir.exists():
-            for d in games_dir.iterdir():
-                if not d.is_dir(): continue
-                tp=d/"title.txt"
-                if not tp.exists(): continue
-                try:
-                    title=tp.read_text(encoding="utf-8",errors="ignore").strip()
-                    gid=d.name.replace("-","").strip()
-                    if title and gid:
+        try:
+            txt=S.get("https://www.gametdb.com/ps3tdb.txt?LANG=EN",timeout=30).text
+            for line in txt.splitlines():
+                if " = " in line:
+                    gid,title=line.split(" = ",1)
+                    PS3_MAP.setdefault(normkey(title),[]).append(gid.strip())
+        except Exception:
+            pass
+        # Reliable fallback title/serial index from GameDB-PS3 release assets.
+        try:
+            data=S.get("https://github.com/niemasd/GameDB-PS3/releases/latest/download/PS3.titles.json",timeout=45).json()
+            if isinstance(data,dict):
+                for gid,title in data.items():
+                    if isinstance(title,str):
+                        PS3_MAP.setdefault(normkey(title),[]).append(str(gid).replace("-",""))
+                    elif isinstance(title,list):
+                        for t in title:
+                            if isinstance(t,str):
+                                PS3_MAP.setdefault(normkey(t),[]).append(str(gid).replace("-",""))
+            elif isinstance(data,list):
+                for item in data:
+                    if not isinstance(item,dict): continue
+                    gid=str(item.get("serial") or item.get("id") or item.get("product_code") or "").replace("-","")
+                    title=item.get("title") or item.get("name")
+                    if gid and isinstance(title,str):
                         PS3_MAP.setdefault(normkey(title),[]).append(gid)
-                except Exception:
-                    pass
-        if not PS3_MAP:
-            try:
-                txt=S.get("https://www.gametdb.com/ps3tdb.txt?LANG=EN",timeout=30).text
-                for line in txt.splitlines():
-                    if " = " in line:
-                        gid,title=line.split(" = ",1)
-                        PS3_MAP.setdefault(normkey(title),[]).append(gid.strip().replace("-",""))
-            except Exception:
-                pass
+        except Exception:
+            pass
     keys=[]
     for t in variants(row):
         k=normkey(t)
@@ -527,6 +523,16 @@ def fetch_one(row):
     if platform not in DIR_MAP and platform not in {"Nintendo Switch","Nintendo Switch 2","PlayStation 5"}:
         return eid,None,"unresolved-platform"
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
+    if platform in {"PlayStation 4","PlayStation 5","Nintendo Switch 2"}:
+        for url,label in moby_candidates(row) or []:
+            try:
+                r=S.get(url,timeout=15)
+                if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                    dest.write_bytes(r.content)
+                    Image.open(dest).verify()
+                    return eid,str(dest),label
+            except Exception:
+                dest.unlink(missing_ok=True)
     exact=(row.get("cover_source_url") or "").strip()
     if exact:
         try:
@@ -688,6 +694,7 @@ def main():
     target_decades={"2000s","2010s-2020s"}
     work_rows=[r for r in rows if (r.get("decade") or "").replace("–","-") in target_decades]
     print("target entries",len(work_rows),flush=True)
+    load_moby_map()
     with ThreadPoolExecutor(max_workers=24) as ex:
         futs=[ex.submit(fetch_one,r) for r in work_rows]
         done=0
