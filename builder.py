@@ -34,7 +34,7 @@ DIR_MAP={
 "Sega Dreamcast":["Sega - Dreamcast"],
 "PlayStation 2":["Sony - PlayStation 2"],
 "Xbox":["Microsoft - Xbox"],
-"Nintendo GameCube":["Nintendo - Nintendo GameCube"],
+"Nintendo GameCube":["Nintendo - GameCube"],
 "Nintendo DS":["Nintendo - Nintendo DS"],
 "PlayStation Portable":["Sony - PlayStation Portable"],
 "Xbox 360":["Microsoft - Xbox 360"],
@@ -101,6 +101,17 @@ SUFFIXES=[" (USA).png"," (USA, Europe).png"," (World).png"," (USA) (Rev 1).png",
 
 
 INDEXES={}
+INDEX_LOOKUPS={}
+PS3_MAP=None
+X360_MAP=None
+
+def normkey(x):
+    x=urllib.parse.unquote(x or "")
+    x=re.sub(r"\.png$|\.jpg$","",x,flags=re.I)
+    x=re.sub(r"\([^)]*\)|\[[^]]*\]"," ",x)
+    x=x.replace("_"," ").replace("-"," ")
+    return re.sub(r"[^a-z0-9]+","",x.lower())
+
 def load_index(d):
     if d in INDEXES: return INDEXES[d]
     u=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"
@@ -108,17 +119,29 @@ def load_index(d):
         r=S.get(u,timeout=30); r.raise_for_status()
         names=[urllib.parse.unquote(x) for x in re.findall(r'href="([^"]+\.png)"',r.text,re.I)]
         INDEXES[d]=set(names)
+        lu={}
+        for n in names:
+            k=normkey(n)
+            if k: lu.setdefault(k,[]).append(n)
+        INDEX_LOOKUPS[d]=lu
     except Exception:
-        INDEXES[d]=set()
+        INDEXES[d]=set(); INDEX_LOOKUPS[d]={}
     return INDEXES[d]
 
 def preferred_names(row,d):
     names=load_index(d)
+    seen=set()
     for t in variants(row):
         for suf in SUFFIXES:
             n=safe_title(t)+suf
-            if n in names:
-                yield n
+            if n in names and n not in seen:
+                seen.add(n); yield n
+        k=normkey(t)
+        cands=INDEX_LOOKUPS.get(d,{}).get(k,[])
+        cands=sorted(cands,key=lambda n:(0 if "(USA)" in n else 1 if "(USA, Europe)" in n else 2 if "(World)" in n else 3 if "(Europe)" in n else 4, len(n)))
+        for n in cands[:3]:
+            if n not in seen:
+                seen.add(n); yield n
 
 def candidate_urls(row):
     exact=(row.get("cover_source_url") or "").strip()
@@ -130,6 +153,38 @@ def candidate_urls(row):
                 name=safe_title(t)+suf
                 url=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+urllib.parse.quote(name,safe="")
                 yield url,f"{d}/{name}"
+
+
+def ps3_candidates(row):
+    global PS3_MAP
+    if PS3_MAP is None:
+        PS3_MAP={}
+        try:
+            txt=S.get("https://www.gametdb.com/ps3tdb.txt?LANG=EN",timeout=30).text
+            for line in txt.splitlines():
+                if " = " in line:
+                    gid,title=line.split(" = ",1)
+                    PS3_MAP.setdefault(normkey(title),[]).append(gid.strip())
+        except Exception: pass
+    for t in variants(row):
+        for gid in PS3_MAP.get(normkey(t),[]):
+            for reg in ["US","EN","JA","FR","DE","ES","IT"]:
+                yield f"https://art.gametdb.com/ps3/coverM/{reg}/{gid}.jpg",f"GameTDB PS3 {gid} {reg}"
+
+def x360_candidates(row):
+    global X360_MAP
+    if X360_MAP is None:
+        X360_MAP={}
+        try:
+            arr=S.get("https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json",timeout=30).json()
+            for g in arr:
+                if g.get("boxart"):
+                    X360_MAP.setdefault(normkey(g.get("title","")),[]).append(g)
+        except Exception: pass
+    for t in variants(row):
+        for g in X360_MAP.get(normkey(t),[]):
+            u=g.get("boxart")
+            if u: yield u,f"x360db {g.get('id','')}"
 
 def fetch_one(row):
     eid=row["entry_id"]; platform=row.get("platform","")
@@ -145,6 +200,24 @@ def fetch_one(row):
                 dest.write_bytes(r.content); Image.open(dest).verify()
                 return eid,str(dest),"saved-exact"
         except Exception: dest.unlink(missing_ok=True)
+    if platform=="PlayStation 3":
+        for url,label in ps3_candidates(row):
+            try:
+                r=S.get(url,timeout=15)
+                if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                    dest.write_bytes(r.content); Image.open(dest).verify()
+                    return eid,str(dest),label
+            except Exception: dest.unlink(missing_ok=True)
+    if platform=="Xbox 360":
+        digital_only={"Castle Crashers","Scott Pilgrim"}
+        if (row.get("original_title") or "") not in digital_only:
+            for url,label in x360_candidates(row):
+                try:
+                    r=S.get(url,timeout=15)
+                    if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                        dest.write_bytes(r.content); Image.open(dest).verify()
+                        return eid,str(dest),label
+                except Exception: dest.unlink(missing_ok=True)
     for d in DIR_MAP.get(platform,[]):
         for name in preferred_names(row,d):
             url=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+urllib.parse.quote(name,safe="")
