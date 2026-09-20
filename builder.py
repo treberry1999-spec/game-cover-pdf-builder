@@ -259,6 +259,11 @@ def main():
             if not r.get("entry_id") and r.get("index")=="index": continue
             rows.append(r)
     print("entries",len(rows),flush=True)
+    dirs=sorted({d for r in rows for d in DIR_MAP.get(r.get("platform",""),[])})
+    print("loading",len(dirs),"system indexes",flush=True)
+    with ThreadPoolExecutor(max_workers=8) as ix:
+        list(ix.map(load_index,dirs))
+    print("indexes loaded",flush=True)
     resolved={}; labels={}
     with ThreadPoolExecutor(max_workers=32) as ex:
         futs=[ex.submit(fetch_one,r) for r in rows]
