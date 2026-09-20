@@ -47,6 +47,10 @@ DIR_MAP={
 }
 SKIP_PLATFORMS={"Magnavox Odyssey","Platform Not Specified","TBA","PlayStation 5","Nintendo Switch 2"}
 ALIASES={
+"Dissidia 012 Final Fantasy":"Dissidia 012 - Duodecim Final Fantasy",
+"NBA Inside 09":"NBA 09 - The Inside",
+"Outrun 2006":"OutRun 2006 - Coast 2 Coast",
+"Pop n Music":"Pop'n Music Portable",
 "Sonic 1":"Sonic the Hedgehog","Sonic 2":"Sonic the Hedgehog 2","Golden Axe 2":"Golden Axe II","The Simpsons: Bart vs Space Mutants":"The Simpsons: Bart vs. the Space Mutants",
 "Dr Robotonik":"Dr. Robotnik's Mean Bean Machine","Musha":"M.U.S.H.A.",
 "MGS2":"Metal Gear Solid 2 - Sons of Liberty","MGS3":"Metal Gear Solid 3 - Snake Eater",
