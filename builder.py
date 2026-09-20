@@ -14,7 +14,7 @@ OUT=ROOT/"output"; COVERS=ROOT/"covers"; CONSOLES=ROOT/"console_images"
 OUT.mkdir(exist_ok=True); COVERS.mkdir(exist_ok=True); CONSOLES.mkdir(exist_ok=True)
 
 DIR_MAP={
-"Atari 2600":["Atari - 2600"],
+"Fairchild Channel F":["Fairchild - Channel F"],\n"Atari 2600":["Atari - 2600"],
 "Vectrex":["GCE - Vectrex"],
 "ColecoVision":["Coleco - ColecoVision"],
 "Nintendo Entertainment System":["Nintendo - Nintendo Entertainment System"],
@@ -45,7 +45,7 @@ DIR_MAP={
 "PlayStation 4":["Sony - PlayStation 4"]
 }
 SKIP_PLATFORMS={"Magnavox Odyssey","Platform Not Specified","TBA","PlayStation 5","Nintendo Switch 2"}
-ALIASES={
+ALIASES={\n"Sonic 1":"Sonic the Hedgehog","Sonic 2":"Sonic the Hedgehog 2","Golden Axe 2":"Golden Axe II","The Simpsons: Bart vs Space Mutants":"The Simpsons: Bart vs. the Space Mutants",
 "Dr Robotonik":"Dr. Robotnik's Mean Bean Machine","Musha":"M.U.S.H.A.",
 "MGS2":"Metal Gear Solid 2 - Sons of Liberty","MGS3":"Metal Gear Solid 3 - Snake Eater",
 "DMC 1":"Devil May Cry","DMC 2":"Devil May Cry 2","DMC 3":"Devil May Cry 3 - Dante's Awakening",
@@ -292,13 +292,59 @@ def switch_candidates(row):
             for reg,typ in [("US","coverHQ"),("US","coverM"),("EN","coverM")]:
                 yield f"https://art.gametdb.com/switch/{typ}/{reg}/{gid}.jpg",f"GameTDB Switch {gid} {reg}"
 
+
+def fallback_actual_image(row, dest):
+    """Last resort: real game/media image from Wikipedia; otherwise real platform/hardware image."""
+    title=(row.get("canonical_title") or row.get("original_title") or "").strip()
+    platform=row.get("platform","")
+    queries=[]
+    if title:
+        if platform and platform not in {"TBA","Platform Not Specified"}:
+            queries += [f"{title} {platform} video game", f"{title} video game"]
+        else:
+            queries += [f"{title} video game"]
+    for q in queries:
+        try:
+            params={"action":"query","generator":"search","gsrsearch":q,"gsrlimit":6,
+                    "prop":"pageimages","piprop":"thumbnail|original","pithumbsize":900,
+                    "format":"json","formatversion":2}
+            j=S.get("https://en.wikipedia.org/w/api.php",params=params,timeout=10).json()
+            pages=(j.get("query") or {}).get("pages") or []
+            for p in pages:
+                img=(p.get("original") or p.get("thumbnail") or {}).get("source")
+                if not img: continue
+                try:
+                    r=S.get(img,timeout=10)
+                    if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                        dest.write_bytes(r.content); Image.open(dest).verify()
+                        return str(dest),f"Wikipedia page image: {p.get('title','')}"
+                except Exception:
+                    dest.unlink(missing_ok=True)
+        except Exception:
+            pass
+    hint=platform
+    if platform=="TBA": hint="PlayStation 5"
+    elif platform=="Platform Not Specified": hint="video game cartridge"
+    if hint:
+        p=console_image(hint)
+        if p and Path(p).exists():
+            try:
+                import shutil
+                shutil.copyfile(p,dest); Image.open(dest).verify()
+                return str(dest),f"physical-media fallback: {hint}"
+            except Exception:
+                dest.unlink(missing_ok=True)
+    return None,None
+
 def fetch_one(row):
     eid=row["entry_id"]; platform=row.get("platform","")
-    if eid in {"VG-0014","VG-0015","VG-0016"}:
-        return eid,None,"vectrex-special-unresolved"
-    if platform in SKIP_PLATFORMS or (platform not in DIR_MAP and platform!="Nintendo Switch"):
-        return eid,None,"unresolved-platform"
     dest=COVERS/(eid+".png")
+    if eid in {"VG-0014","VG-0015","VG-0016"}:
+        p,label=fallback_actual_image(row,dest)
+        return eid,p,label or "vectrex-media-fallback"
+    if platform in SKIP_PLATFORMS or (platform not in DIR_MAP and platform!="Nintendo Switch"):
+        p,label=fallback_actual_image(row,dest)
+        return eid,p,label or "physical-media-fallback"
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
     exact=(row.get("cover_source_url") or "").strip()
     if exact:
@@ -345,7 +391,8 @@ def fetch_one(row):
                     dest.write_bytes(r.content); Image.open(dest).verify()
                     return eid,str(dest),f"{d}/{name}"
             except Exception: dest.unlink(missing_ok=True)
-    return eid,None,"not-found"
+    p,label=fallback_actual_image(row,dest)
+    return eid,p,label or "physical-media-fallback"
 
 def console_image(system):
     fn=CONSOLES/(re.sub(r"[^A-Za-z0-9]+","_",system).strip("_")+".jpg")
