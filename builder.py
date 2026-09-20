@@ -240,34 +240,38 @@ def ps3_candidates(row):
     global PS3_MAP
     if PS3_MAP is None:
         PS3_MAP={}
-        try:
-            txt=S.get("https://www.gametdb.com/ps3tdb.txt?LANG=EN",timeout=30).text
-            for line in txt.splitlines():
-                if " = " in line:
-                    gid,title=line.split(" = ",1)
-                    PS3_MAP.setdefault(normkey(title),[]).append(gid.strip())
-        except Exception:
-            pass
-        # Reliable fallback title/serial index from GameDB-PS3 release assets.
-        try:
-            data=S.get("https://github.com/niemasd/GameDB-PS3/releases/latest/download/PS3.titles.json",timeout=45).json()
-            if isinstance(data,dict):
-                for gid,title in data.items():
-                    if isinstance(title,str):
-                        PS3_MAP.setdefault(normkey(title),[]).append(str(gid).replace("-",""))
-                    elif isinstance(title,list):
-                        for t in title:
-                            if isinstance(t,str):
-                                PS3_MAP.setdefault(normkey(t),[]).append(str(gid).replace("-",""))
-            elif isinstance(data,list):
-                for item in data:
-                    if not isinstance(item,dict): continue
-                    gid=str(item.get("serial") or item.get("id") or item.get("product_code") or "").replace("-","")
-                    title=item.get("title") or item.get("name")
-                    if gid and isinstance(title,str):
+        local=ROOT/"ps3tdb.txt"
+        if local.exists():
+            try:
+                txt=local.read_text(encoding="utf-8",errors="ignore")
+                for line in txt.splitlines():
+                    if " = " in line:
+                        gid,title=line.split(" = ",1)
+                        PS3_MAP.setdefault(normkey(title),[]).append(gid.strip().replace("-",""))
+            except Exception:
+                pass
+        games_dir=ROOT/"ps3db"/"games"
+        if games_dir.exists():
+            for d in games_dir.iterdir():
+                if not d.is_dir(): continue
+                tp=d/"title.txt"
+                if not tp.exists(): continue
+                try:
+                    title=tp.read_text(encoding="utf-8",errors="ignore").strip()
+                    gid=d.name.replace("-","").strip()
+                    if title and gid:
                         PS3_MAP.setdefault(normkey(title),[]).append(gid)
-        except Exception:
-            pass
+                except Exception:
+                    pass
+        if not PS3_MAP:
+            try:
+                txt=S.get("https://www.gametdb.com/ps3tdb.txt?LANG=EN",timeout=30).text
+                for line in txt.splitlines():
+                    if " = " in line:
+                        gid,title=line.split(" = ",1)
+                        PS3_MAP.setdefault(normkey(title),[]).append(gid.strip().replace("-",""))
+            except Exception:
+                pass
     keys=[]
     for t in variants(row):
         k=normkey(t)
@@ -294,19 +298,27 @@ def x360_candidates(row):
     if X360_MAP is None:
         X360_MAP={}
         arr=[]
-        for dburl in (
-            "https://xenia-manager.github.io/x360db/games.json",
-            "https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json",
-        ):
+        local=ROOT/"x360db_games.json"
+        if local.exists():
             try:
-                data=S.get(dburl,timeout=45).json()
-                if isinstance(data,list):
-                    arr=data; break
-                if isinstance(data,dict):
-                    arr=data.get("games") or data.get("titles") or []
-                    if isinstance(arr,list) and arr: break
+                data=json.loads(local.read_text(encoding="utf-8"))
+                arr=data if isinstance(data,list) else (data.get("games") or data.get("titles") or [])
             except Exception:
-                continue
+                arr=[]
+        if not arr:
+            for dburl in (
+                "https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json",
+                "https://xenia-manager.github.io/x360db/games.json",
+            ):
+                try:
+                    data=S.get(dburl,timeout=45).json()
+                    if isinstance(data,list):
+                        arr=data; break
+                    if isinstance(data,dict):
+                        arr=data.get("games") or data.get("titles") or []
+                        if isinstance(arr,list) and arr: break
+                except Exception:
+                    continue
         for g in arr:
             if isinstance(g,dict):
                 X360_MAP.setdefault(normkey(g.get("title","")),[]).append(g)
@@ -320,6 +332,7 @@ def x360_candidates(row):
             gid=(g.get("id") or "").strip()
             u=g.get("boxart")
             if u and str(u).startswith("http"):
+                u=str(u).replace("http://download.xbox.com:80","https://download.xbox.com").replace("http://download.xbox.com","https://download.xbox.com")
                 yield u,f"x360db index {gid}"
             if gid:
                 yield f"https://xenia-manager.github.io/x360db/titles/{gid}/artwork/boxart.jpg",f"x360db pages {gid}"
@@ -347,13 +360,24 @@ def switch_candidates(row):
     global SWITCH_MAP
     if SWITCH_MAP is None:
         SWITCH_MAP={}
-        try:
-            txt=S.get("https://www.gametdb.com/switchtdb.txt?LANG=EN",timeout=40).text
-            for line in txt.splitlines():
-                if " = " in line:
-                    gid,title=line.split(" = ",1)
-                    SWITCH_MAP.setdefault(normkey(title),[]).append(gid.strip())
-        except Exception: pass
+        local=ROOT/"switchtdb.txt"
+        if local.exists():
+            try:
+                txt=local.read_text(encoding="utf-8",errors="ignore")
+                for line in txt.splitlines():
+                    if " = " in line:
+                        gid,title=line.split(" = ",1)
+                        SWITCH_MAP.setdefault(normkey(title),[]).append(gid.strip())
+            except Exception:
+                pass
+        if not SWITCH_MAP:
+            try:
+                txt=S.get("https://www.gametdb.com/switchtdb.txt?LANG=EN",timeout=40).text
+                for line in txt.splitlines():
+                    if " = " in line:
+                        gid,title=line.split(" = ",1)
+                        SWITCH_MAP.setdefault(normkey(title),[]).append(gid.strip())
+            except Exception: pass
     keys=[]
     for t in variants(row):
         k=normkey(t)
@@ -421,7 +445,9 @@ def fetch_one(row):
     dest=COVERS/(eid+".png")
     if eid in {"VG-0014","VG-0015","VG-0016"}:
         return eid,None,"unresolved-special-case"
-    if platform in SKIP_PLATFORMS or (platform not in DIR_MAP and platform!="Nintendo Switch"):
+    if platform in SKIP_PLATFORMS and platform!="Nintendo Switch 2":
+        return eid,None,"unresolved-platform"
+    if platform not in DIR_MAP and platform not in {"Nintendo Switch","Nintendo Switch 2"}:
         return eid,None,"unresolved-platform"
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
     exact=(row.get("cover_source_url") or "").strip()
@@ -450,7 +476,7 @@ def fetch_one(row):
                         dest.write_bytes(r.content); Image.open(dest).verify()
                         return eid,str(dest),label
                 except Exception: dest.unlink(missing_ok=True)
-    if platform=="Nintendo Switch":
+    if platform in {"Nintendo Switch","Nintendo Switch 2"}:
         for url,label in switch_candidates(row):
             try:
                 r=S.get(url,timeout=8)
@@ -582,7 +608,7 @@ def main():
         list(ix.map(load_index,dirs))
     print("indexes loaded",flush=True)
     resolved={}; labels={}
-    with ThreadPoolExecutor(max_workers=48) as ex:
+    with ThreadPoolExecutor(max_workers=24) as ex:
         futs=[ex.submit(fetch_one,r) for r in rows]
         done=0
         for f in as_completed(futs):
@@ -590,11 +616,14 @@ def main():
             if p: resolved[eid]=p; labels[eid]=label
             if done%50==0: print("resolved",done,"found",len(resolved),flush=True)
     decades=["1970s-1980s","1990s","2000s","2010s-2020s"]
-    summary={"entries":len(rows),"covers_found":len(resolved),"unresolved":len(rows)-len(resolved),"decades":{}}
+    summary={"entries":len(rows),"covers_found":len(resolved),"unresolved":len(rows)-len(resolved),"decades":{},"systems":{}}
     for d in decades:
         rr=[r for r in rows if (r.get("decade") or "").replace("–","-")==d]
         p=build_pdf(d,rr,resolved)
         summary["decades"][d]={"entries":len(rr),"resolved":sum(1 for r in rr if resolved.get(r["entry_id"])),"pdf":p.name}
+    for system in sorted({r.get("platform","") for r in rows}):
+        sr=[r for r in rows if r.get("platform","")==system]
+        summary["systems"][system]={"entries":len(sr),"resolved":sum(1 for r in sr if resolved.get(r["entry_id"]))}
     (OUT/"build_summary.json").write_text(json.dumps(summary,indent=2))
     with open(OUT/"resolved_sources.csv","w",newline="",encoding="utf-8") as f:
         w=csv.writer(f); w.writerow(["entry_id","source"])
