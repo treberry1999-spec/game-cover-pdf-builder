@@ -15,42 +15,34 @@ OUT.mkdir(exist_ok=True); COVERS.mkdir(exist_ok=True); CONSOLES.mkdir(exist_ok=T
 DIR_MAP={
 "Atari 2600":["Atari - 2600"],
 "Vectrex":["GCE - Vectrex"],
+"ColecoVision":["Coleco - ColecoVision"],
 "Nintendo Entertainment System":["Nintendo - Nintendo Entertainment System"],
-"NES":["Nintendo - Nintendo Entertainment System"],
 "Super Nintendo Entertainment System":["Nintendo - Super Nintendo Entertainment System"],
-"SNES":["Nintendo - Super Nintendo Entertainment System"],
+"Sega Master System":["Sega - Master System - Mark III"],
 "Sega Genesis":["Sega - Mega Drive - Genesis"],
-"Genesis":["Sega - Mega Drive - Genesis"],
 "Sega 32X":["Sega - 32X"],
 "Game Boy":["Nintendo - Game Boy"],
 "Game Boy Color":["Nintendo - Game Boy Color"],
-"Game Gear":["Sega - Game Gear"],
-"TurboGrafx-16":["NEC - PC Engine - TurboGrafx 16"],
-"TurboGrafx-CD":["NEC - PC Engine CD - TurboGrafx-CD"],
-"PC Engine":["NEC - PC Engine - TurboGrafx 16"],
-"Neo Geo":["SNK - Neo Geo"],
-"3DO":["The 3DO Company - 3DO"],
+"Game Boy Advance":["Nintendo - Game Boy Advance"],
+"Sega Game Gear":["Sega - Game Gear"],
+"TurboGrafx-16 ecosystem (source label)":["NEC - PC Engine - TurboGrafx 16","NEC - PC Engine CD - TurboGrafx-CD"],
+"Neo Geo (AES/MVS not specified)":["SNK - Neo Geo"],
+"Panasonic 3DO":["The 3DO Company - 3DO"],
 "PlayStation":["Sony - PlayStation"],
-"PlayStation 1":["Sony - PlayStation"],
 "Nintendo 64":["Nintendo - Nintendo 64"],
+"Sega Saturn":["Sega - Saturn"],
 "Sega Dreamcast":["Sega - Dreamcast"],
-"Dreamcast":["Sega - Dreamcast"],
 "PlayStation 2":["Sony - PlayStation 2"],
 "Xbox":["Microsoft - Xbox"],
 "Nintendo GameCube":["Nintendo - Nintendo GameCube"],
-"GameCube":["Nintendo - Nintendo GameCube"],
 "Nintendo DS":["Nintendo - Nintendo DS"],
 "PlayStation Portable":["Sony - PlayStation Portable"],
-"PSP":["Sony - PlayStation Portable"],
 "Xbox 360":["Microsoft - Xbox 360"],
 "PlayStation 3":["Sony - PlayStation 3"],
 "Wii":["Nintendo - Wii"],
-"Nintendo 3DS":["Nintendo - Nintendo 3DS"],
-"PlayStation 4":["Sony - PlayStation 4"],
-"PS4":["Sony - PlayStation 4"],
-"Nintendo Switch":["Nintendo - Nintendo Switch"],
+"Nintendo 3DS":["Nintendo - Nintendo 3DS"]
 }
-SKIP_PLATFORMS={"Magnavox Odyssey","PlayStation 4/5","Nintendo Switch 2","Platform Not Specified"}
+SKIP_PLATFORMS={"Magnavox Odyssey","PlayStation 4/5 (source combined)","Nintendo Switch 2 (source section)","Platform Not Specified"}
 ALIASES={
 "Dr Robotonik":"Dr. Robotnik's Mean Bean Machine","Musha":"M.U.S.H.A.",
 "MGS2":"Metal Gear Solid 2 - Sons of Liberty","MGS3":"Metal Gear Solid 3 - Snake Eater",
@@ -107,6 +99,27 @@ def variants(row):
 
 SUFFIXES=[" (USA).png"," (USA, Europe).png"," (World).png"," (USA) (Rev 1).png"," (Europe).png"," (Japan).png",".png"]
 
+
+INDEXES={}
+def load_index(d):
+    if d in INDEXES: return INDEXES[d]
+    u=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"
+    try:
+        r=S.get(u,timeout=30); r.raise_for_status()
+        names=[urllib.parse.unquote(x) for x in re.findall(r'href="([^"]+\.png)"',r.text,re.I)]
+        INDEXES[d]=set(names)
+    except Exception:
+        INDEXES[d]=set()
+    return INDEXES[d]
+
+def preferred_names(row,d):
+    names=load_index(d)
+    for t in variants(row):
+        for suf in SUFFIXES:
+            n=safe_title(t)+suf
+            if n in names:
+                yield n
+
 def candidate_urls(row):
     exact=(row.get("cover_source_url") or "").strip()
     if exact: yield exact,"saved-exact"
@@ -124,18 +137,23 @@ def fetch_one(row):
         return eid,None,"unresolved-platform"
     dest=COVERS/(eid+".png")
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
-    for url,label in candidate_urls(row):
+    exact=(row.get("cover_source_url") or "").strip()
+    if exact:
         try:
-            r=S.get(url,timeout=12)
+            r=S.get(exact,timeout=20)
             if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
-                dest.write_bytes(r.content)
-                try:
-                    im=Image.open(dest); im.verify()
-                    return eid,str(dest),label
-                except Exception:
-                    dest.unlink(missing_ok=True)
-        except Exception:
-            pass
+                dest.write_bytes(r.content); Image.open(dest).verify()
+                return eid,str(dest),"saved-exact"
+        except Exception: dest.unlink(missing_ok=True)
+    for d in DIR_MAP.get(platform,[]):
+        for name in preferred_names(row,d):
+            url=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+urllib.parse.quote(name,safe="")
+            try:
+                r=S.get(url,timeout=20)
+                if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                    dest.write_bytes(r.content); Image.open(dest).verify()
+                    return eid,str(dest),f"{d}/{name}"
+            except Exception: dest.unlink(missing_ok=True)
     return eid,None,"not-found"
 
 def console_image(system):
