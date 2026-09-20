@@ -412,9 +412,55 @@ def load_moby_map():
         try:
             txt=fp.read_text(encoding="utf-8",errors="ignore")
             m=re.search(r'<meta property="og:title" content="([^"]+)"',txt,re.I)
-            if not m: continue
+            if not m:
+                continue
             title=html.unescape(m.group(1))
-            title=re.sub(r'\s*\(\d{4}\)\s*-\s*MobyGames\s*
+            title=re.sub(r'\\s*\\(\\d{4}\\)\\s*-\\s*MobyGames\\s*$', '', title).strip()
+            pm=re.search(r":platforms='(\\[.*?\\])'\\s+:game-id=",txt,re.S)
+            if not pm:
+                continue
+            arr=json.loads(html.unescape(pm.group(1)))
+            key=normkey(title)
+            for item in arr:
+                if not isinstance(item,dict):
+                    continue
+                plat=(item.get("name") or "").strip()
+                main=item.get("main_cover") or {}
+                url=main.get("image_url")
+                if key and plat and url:
+                    MOBY_MAP.setdefault(key,[]).append({"platform":plat,"url":url,"title":title})
+        except Exception:
+            continue
+    print("moby titles",len(MOBY_MAP),flush=True)
+    return MOBY_MAP
+
+def moby_candidates(row):
+    mapping=load_moby_map()
+    platform=row.get("platform","")
+    platform_alias={
+        "PlayStation 4":"PlayStation 4",
+        "PlayStation 5":"PlayStation 5",
+        "Nintendo Switch 2":"Nintendo Switch 2",
+    }.get(platform)
+    if not platform_alias or not mapping:
+        return
+    keys=[]
+    for t in variants(row):
+        k=normkey(t)
+        if k in mapping and k not in keys:
+            keys.append(k)
+    if not keys:
+        keys=fuzzy_db_matches(row,mapping,90)
+    seen=set()
+    for k in keys[:4]:
+        for item in mapping.get(k,[]):
+            if item.get("platform")==platform_alias:
+                u=item.get("url")
+                if u and u not in seen:
+                    seen.add(u)
+                    yield u,f"MobyGames mirror {platform_alias}: {item.get('title','')}"
+
+def fallback_actual_image(row, dest):
     """Last resort: real game/media image from Wikipedia; otherwise real platform/hardware image."""
     title=(row.get("canonical_title") or row.get("original_title") or "").strip()
     platform=row.get("platform","")
@@ -433,25 +479,30 @@ def load_moby_map():
             pages=(j.get("query") or {}).get("pages") or []
             for p in pages:
                 img=(p.get("thumbnail") or p.get("original") or {}).get("source")
-                if not img: continue
+                if not img:
+                    continue
                 try:
                     r=S.get(img,timeout=10)
                     if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
-                        dest.write_bytes(r.content); Image.open(dest).verify()
+                        dest.write_bytes(r.content)
+                        Image.open(dest).verify()
                         return str(dest),f"Wikipedia page image: {p.get('title','')}"
                 except Exception:
                     dest.unlink(missing_ok=True)
         except Exception:
             pass
     hint=platform
-    if platform=="TBA": hint="PlayStation 5"
-    elif platform=="Platform Not Specified": hint="video game cartridge"
+    if platform=="TBA":
+        hint="PlayStation 5"
+    elif platform=="Platform Not Specified":
+        hint="video game cartridge"
     if hint:
         p=console_image(hint)
         if p and Path(p).exists():
             try:
                 import shutil
-                shutil.copyfile(p,dest); Image.open(dest).verify()
+                shutil.copyfile(p,dest)
+                Image.open(dest).verify()
                 return str(dest),f"physical-media fallback: {hint}"
             except Exception:
                 dest.unlink(missing_ok=True)
@@ -459,7 +510,8 @@ def load_moby_map():
         u="https://commons.wikimedia.org/wiki/Special:Redirect/file/Game_Boy_with_Tetris_cartridge.jpg?width=900"
         r=S.get(u,timeout=15)
         if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
-            dest.write_bytes(r.content); Image.open(dest).verify()
+            dest.write_bytes(r.content)
+            Image.open(dest).verify()
             return str(dest),"generic physical game-media fallback"
     except Exception:
         dest.unlink(missing_ok=True)
