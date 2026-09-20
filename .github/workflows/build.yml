@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: pip install requests pillow reportlab
+        run: pip install requests pillow reportlab rapidfuzz
       - name: Build PDFs
         run: python builder.py
       - name: List output
