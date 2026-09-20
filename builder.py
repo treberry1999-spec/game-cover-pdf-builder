@@ -97,7 +97,7 @@ def apply_platform_correction(row):
         elif t in SWITCH_TITLES:
             row["platform"]="Nintendo Switch"; row["system_release_year"]="2017"
         elif t=="The Legend of Zelda: Ocarina of Time":
-            row["platform"]="Nintendo 64"; row["system_release_year"]="1996"
+            row["platform"]="Nintendo 64"; row["system_release_year"]="1996"; row["decade"]="1990s"
         else:
             row["platform"]="TBA"; row["system_release_year"]="9999"
     return row
