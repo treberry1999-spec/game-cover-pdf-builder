@@ -520,12 +520,6 @@ def fallback_actual_image(row, dest):
 def fetch_one(row):
     eid=row["entry_id"]; platform=row.get("platform","")
     dest=COVERS/(eid+".png")
-    if eid in {"VG-0014","VG-0015","VG-0016"}:
-        return eid,None,"unresolved-special-case"
-    if platform in SKIP_PLATFORMS and platform!="Nintendo Switch 2":
-        return eid,None,"unresolved-platform"
-    if platform not in DIR_MAP and platform not in {"Nintendo Switch","Nintendo Switch 2"}:
-        return eid,None,"unresolved-platform"
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
     exact=(row.get("cover_source_url") or "").strip()
     if exact:
@@ -535,6 +529,12 @@ def fetch_one(row):
                 dest.write_bytes(r.content); Image.open(dest).verify()
                 return eid,str(dest),"saved-exact"
         except Exception: dest.unlink(missing_ok=True)
+    if eid in {"VG-0014","VG-0015","VG-0016"}:
+        return eid,None,"unresolved-special-case"
+    if platform in SKIP_PLATFORMS and platform!="Nintendo Switch 2":
+        return eid,None,"unresolved-platform"
+    if platform not in DIR_MAP and platform not in {"Nintendo Switch","Nintendo Switch 2"}:
+        return eid,None,"unresolved-platform"
     if platform=="PlayStation 3":
         for url,label in ps3_candidates(row):
             try:
@@ -678,7 +678,7 @@ def main():
             if not r.get("entry_id") and r.get("index")=="index": continue
             apply_platform_correction(r)
             rows.append(r)
-    rows=[r for r in rows if (r.get("decade") or "").replace("–","-")=="2000s"]
+    rows=[r for r in rows if r.get("platform") in {"Magnavox Odyssey","Fairchild Channel F"}]
     print("entries",len(rows),flush=True)
     dirs=sorted({d for r in rows for d in DIR_MAP.get(r.get("platform",""),[])})
     print("loading",len(dirs),"system indexes",flush=True)
@@ -693,7 +693,7 @@ def main():
             eid,p,label=f.result(); done+=1
             if p: resolved[eid]=p; labels[eid]=label
             if done%50==0: print("resolved",done,"found",len(resolved),flush=True)
-    decades=["2000s"]
+    decades=["1970s-1980s"]
     summary={"entries":len(rows),"covers_found":len(resolved),"unresolved":len(rows)-len(resolved),"decades":{},"systems":{}}
     for d in decades:
         rr=[r for r in rows if (r.get("decade") or "").replace("–","-")==d]
