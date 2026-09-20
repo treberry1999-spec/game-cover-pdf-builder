@@ -356,6 +356,14 @@ def fallback_actual_image(row, dest):
                 return str(dest),f"physical-media fallback: {hint}"
             except Exception:
                 dest.unlink(missing_ok=True)
+    try:
+        u="https://commons.wikimedia.org/wiki/Special:Redirect/file/Game_Boy_with_Tetris_cartridge.jpg?width=900"
+        r=S.get(u,timeout=15)
+        if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+            dest.write_bytes(r.content); Image.open(dest).verify()
+            return str(dest),"generic physical game-media fallback"
+    except Exception:
+        dest.unlink(missing_ok=True)
     return None,None
 
 def fetch_one(row):
