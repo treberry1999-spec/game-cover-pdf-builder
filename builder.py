@@ -230,9 +230,8 @@ def ps3_candidates(row):
     if not keys: keys=fuzzy_db_matches(row,PS3_MAP,86)
     for k in keys:
         for gid in PS3_MAP.get(k,[]):
-            for reg in ["US","EN","JA","FR","DE","ES","IT"]:
-                for typ in ["coverHQ","coverM","cover"]:
-                    yield f"https://art.gametdb.com/ps3/{typ}/{reg}/{gid}.jpg",f"GameTDB PS3 {gid} {reg}"
+            for reg,typ in [("US","coverM"),("EN","coverM"),("US","cover")]:
+                yield f"https://art.gametdb.com/ps3/{typ}/{reg}/{gid}.jpg",f"GameTDB PS3 {gid} {reg}"
 
 def x360_candidates(row):
     global X360_MAP
@@ -290,9 +289,8 @@ def switch_candidates(row):
     if not keys: keys=fuzzy_db_matches(row,SWITCH_MAP,86)
     for k in keys:
         for gid in SWITCH_MAP.get(k,[]):
-            for reg in ["US","EN","CA","AU","JA","FR","DE","ES","IT"]:
-                for typ in ["coverHQ","coverM","cover"]:
-                    yield f"https://art.gametdb.com/switch/{typ}/{reg}/{gid}.jpg",f"GameTDB Switch {gid} {reg}"
+            for reg,typ in [("US","coverHQ"),("US","coverM"),("EN","coverM")]:
+                yield f"https://art.gametdb.com/switch/{typ}/{reg}/{gid}.jpg",f"GameTDB Switch {gid} {reg}"
 
 def fetch_one(row):
     eid=row["entry_id"]; platform=row.get("platform","")
@@ -313,7 +311,7 @@ def fetch_one(row):
     if platform=="PlayStation 3":
         for url,label in ps3_candidates(row):
             try:
-                r=S.get(url,timeout=15)
+                r=S.get(url,timeout=8)
                 if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
                     dest.write_bytes(r.content); Image.open(dest).verify()
                     return eid,str(dest),label
@@ -331,7 +329,7 @@ def fetch_one(row):
     if platform=="Nintendo Switch":
         for url,label in switch_candidates(row):
             try:
-                r=S.get(url,timeout=18)
+                r=S.get(url,timeout=8)
                 if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
                     dest.write_bytes(r.content); Image.open(dest).verify()
                     return eid,str(dest),label
@@ -342,7 +340,7 @@ def fetch_one(row):
         for name in names:
             url=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+urllib.parse.quote(name,safe="")
             try:
-                r=S.get(url,timeout=20)
+                r=S.get(url,timeout=8)
                 if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
                     dest.write_bytes(r.content); Image.open(dest).verify()
                     return eid,str(dest),f"{d}/{name}"
@@ -459,7 +457,7 @@ def main():
         list(ix.map(load_index,dirs))
     print("indexes loaded",flush=True)
     resolved={}; labels={}
-    with ThreadPoolExecutor(max_workers=32) as ex:
+    with ThreadPoolExecutor(max_workers=48) as ex:
         futs=[ex.submit(fetch_one,r) for r in rows]
         done=0
         for f in as_completed(futs):
