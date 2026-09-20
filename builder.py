@@ -7,6 +7,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from rapidfuzz import fuzz, process
 
 ROOT=Path(__file__).resolve().parent
 OUT=ROOT/"output"; COVERS=ROOT/"covers"; CONSOLES=ROOT/"console_images"
@@ -40,9 +41,10 @@ DIR_MAP={
 "Xbox 360":["Microsoft - Xbox 360"],
 "PlayStation 3":["Sony - PlayStation 3"],
 "Wii":["Nintendo - Wii"],
-"Nintendo 3DS":["Nintendo - Nintendo 3DS"]
+"Nintendo 3DS":["Nintendo - Nintendo 3DS"],
+"PlayStation 4":["Sony - PlayStation 4"]
 }
-SKIP_PLATFORMS={"Magnavox Odyssey","PlayStation 4/5 (source combined)","Nintendo Switch 2 (source section)","Platform Not Specified"}
+SKIP_PLATFORMS={"Magnavox Odyssey","Platform Not Specified","TBA","PlayStation 5","Nintendo Switch 2"}
 ALIASES={
 "Dr Robotonik":"Dr. Robotnik's Mean Bean Machine","Musha":"M.U.S.H.A.",
 "MGS2":"Metal Gear Solid 2 - Sons of Liberty","MGS3":"Metal Gear Solid 3 - Snake Eater",
@@ -72,6 +74,32 @@ ALIASES={
 "Dbz kakaraot":"Dragon Ball Z - Kakarot","Dbz xenoverse":"Dragon Ball Xenoverse","Dbz xenoverse 2":"Dragon Ball Xenoverse 2",
 "Dbz Ultimate Tenkaichi":"Dragon Ball Z - Ultimate Tenkaichi","Berserk":"Berzerk","Hyperchase":"HyperChase - Auto Race"
 }
+
+PS5_TITLES={"Assassin's Creed Shadows","Astro Bot","Final Fantasy VII Rebirth","Final Fantasy XVI","Monster Hunter Wilds","Marvel's Spider-Man 2","Synth Riders"}
+PS4_TITLES={"Cyberpunk 2077","Death Stranding","Dragon Ball Z: Kakarot","Devil May Cry 5","Ghost Of Tsushima","Hitman 3","Infamous Second Son","Injustice 2","It Takes Two","The Last of Us Part II","Life Is Strange","NieR:Automata","Nioh","Nioh 2","Persona 5 Royal","One Piece: Pirate Warriors 4","Psychonauts 2","Shadow Of The Colossus","Shadow Of The Tomb Raider","Spider-Man Miles Morales","The Witcher 3","Wolfenstein: The New Order","Wolfenstein II: The New Colossus"}
+SWITCH2_TITLES={"Donkey Kong Bananza","Mario Kart World"}
+SWITCH_TITLES={"Bayonetta 2","Bayonetta 3","Donkey Kong Country Tropical Freeze","Hades","Kirby and the Forgotten Land","Luigi's Mansion 3","Mario Kart 8","Metroid Dread","Paper Mario Origami King","Pikmin 3","Pikmin 4","Sayonara Wild Hearts","Super Smash Bros. Ultimate","Super Mario Bros. Wonder","Super Mario Odyssey","Xenoblade Chronicles","The Legend of Zelda: Breath of the Wild","The Legend of Zelda: Tears of the Kingdom"}
+
+def apply_platform_correction(row):
+    p=row.get("platform",""); t=(row.get("canonical_title") or row.get("original_title") or "").strip()
+    if p=="PlayStation 4/5 (source combined)":
+        if t in PS5_TITLES:
+            row["platform"]="PlayStation 5"; row["system_release_year"]="2020"
+        elif t in PS4_TITLES:
+            row["platform"]="PlayStation 4"; row["system_release_year"]="2013"
+        else:
+            row["platform"]="TBA"; row["system_release_year"]="9999"
+    elif p=="Nintendo Switch 2 (source section)":
+        if t in SWITCH2_TITLES:
+            row["platform"]="Nintendo Switch 2"; row["system_release_year"]="2025"
+        elif t in SWITCH_TITLES:
+            row["platform"]="Nintendo Switch"; row["system_release_year"]="2017"
+        elif t=="The Legend of Zelda: Ocarina of Time":
+            row["platform"]="Nintendo 64"; row["system_release_year"]="1996"
+        else:
+            row["platform"]="TBA"; row["system_release_year"]="9999"
+    return row
+
 BASE="https://thumbnails.libretro.com"
 S=requests.Session(); S.headers.update({"User-Agent":"Mozilla/5.0 game-cover-catalog-builder/1.0"})
 
@@ -104,6 +132,7 @@ INDEXES={}
 INDEX_LOOKUPS={}
 PS3_MAP=None
 X360_MAP=None
+SWITCH_MAP=None
 
 def normkey(x):
     x=urllib.parse.unquote(x or "")
@@ -143,6 +172,34 @@ def preferred_names(row,d):
             if n not in seen:
                 seen.add(n); yield n
 
+
+def numeric_tokens(x):
+    return tuple(re.findall(r"\d+", (x or "").lower()))
+
+def fuzzy_names(row,d):
+    load_index(d)
+    lu=INDEX_LOOKUPS.get(d,{})
+    if not lu: return
+    keys=list(lu.keys())
+    seen=set(); scored=[]
+    for t in variants(row):
+        q=normkey(t)
+        if not q: continue
+        for k,score,_ in process.extract(q,keys,scorer=fuzz.WRatio,limit=8,score_cutoff=86):
+            qnums=numeric_tokens(t); knums=numeric_tokens(k)
+            if qnums and knums and qnums!=knums: continue
+            if (qnums and not knums) or (knums and not qnums): continue
+            scored.append((score,k))
+    scored.sort(reverse=True)
+    if not scored: return
+    best=scored[0][0]
+    for score,k in scored:
+        if score < max(88,best-3): continue
+        for n in sorted(lu.get(k,[]),key=lambda n:(0 if "(USA)" in n else 1 if "(USA, Europe)" in n else 2 if "(World)" in n else 3 if "(Europe)" in n else 4,len(n))):
+            if n not in seen:
+                seen.add(n); yield n
+                if len(seen)>=4: return
+
 def candidate_urls(row):
     exact=(row.get("cover_source_url") or "").strip()
     if exact: yield exact,"saved-exact"
@@ -166,10 +223,16 @@ def ps3_candidates(row):
                     gid,title=line.split(" = ",1)
                     PS3_MAP.setdefault(normkey(title),[]).append(gid.strip())
         except Exception: pass
+    keys=[]
     for t in variants(row):
-        for gid in PS3_MAP.get(normkey(t),[]):
+        k=normkey(t)
+        if k in PS3_MAP: keys.append(k)
+    if not keys: keys=fuzzy_db_matches(row,PS3_MAP,86)
+    for k in keys:
+        for gid in PS3_MAP.get(k,[]):
             for reg in ["US","EN","JA","FR","DE","ES","IT"]:
-                yield f"https://art.gametdb.com/ps3/coverM/{reg}/{gid}.jpg",f"GameTDB PS3 {gid} {reg}"
+                for typ in ["coverHQ","coverM","cover"]:
+                    yield f"https://art.gametdb.com/ps3/{typ}/{reg}/{gid}.jpg",f"GameTDB PS3 {gid} {reg}"
 
 def x360_candidates(row):
     global X360_MAP
@@ -181,14 +244,61 @@ def x360_candidates(row):
                 if g.get("boxart"):
                     X360_MAP.setdefault(normkey(g.get("title","")),[]).append(g)
         except Exception: pass
+    keys=[]
     for t in variants(row):
-        for g in X360_MAP.get(normkey(t),[]):
+        k=normkey(t)
+        if k in X360_MAP: keys.append(k)
+    if not keys: keys=fuzzy_db_matches(row,X360_MAP,86)
+    for k in keys:
+        for g in X360_MAP.get(k,[]):
             u=g.get("boxart")
             if u: yield u,f"x360db {g.get('id','')}"
 
+
+def fuzzy_db_matches(row, mapping, cutoff=87):
+    if not mapping: return []
+    keys=list(mapping.keys()); out=[]; seen=set()
+    for t in variants(row):
+        q=normkey(t)
+        if not q: continue
+        for k,score,_ in process.extract(q,keys,scorer=fuzz.WRatio,limit=5,score_cutoff=cutoff):
+            qnums=numeric_tokens(t); knums=numeric_tokens(k)
+            if qnums and knums and qnums!=knums: continue
+            if (qnums and not knums) or (knums and not qnums): continue
+            if k not in seen:
+                seen.add(k); out.append((score,k))
+    out.sort(reverse=True)
+    if not out: return []
+    best=out[0][0]
+    return [k for score,k in out[:4] if score >= max(cutoff,best-4)]
+
+def switch_candidates(row):
+    global SWITCH_MAP
+    if SWITCH_MAP is None:
+        SWITCH_MAP={}
+        try:
+            txt=S.get("https://www.gametdb.com/switchtdb.txt?LANG=EN",timeout=40).text
+            for line in txt.splitlines():
+                if " = " in line:
+                    gid,title=line.split(" = ",1)
+                    SWITCH_MAP.setdefault(normkey(title),[]).append(gid.strip())
+        except Exception: pass
+    keys=[]
+    for t in variants(row):
+        k=normkey(t)
+        if k in SWITCH_MAP: keys.append(k)
+    if not keys: keys=fuzzy_db_matches(row,SWITCH_MAP,86)
+    for k in keys:
+        for gid in SWITCH_MAP.get(k,[]):
+            for reg in ["US","EN","CA","AU","JA","FR","DE","ES","IT"]:
+                for typ in ["coverHQ","coverM","cover"]:
+                    yield f"https://art.gametdb.com/switch/{typ}/{reg}/{gid}.jpg",f"GameTDB Switch {gid} {reg}"
+
 def fetch_one(row):
     eid=row["entry_id"]; platform=row.get("platform","")
-    if platform in SKIP_PLATFORMS or platform not in DIR_MAP:
+    if eid in {"VG-0014","VG-0015","VG-0016"}:
+        return eid,None,"vectrex-special-unresolved"
+    if platform in SKIP_PLATFORMS or (platform not in DIR_MAP and platform!="Nintendo Switch"):
         return eid,None,"unresolved-platform"
     dest=COVERS/(eid+".png")
     if dest.exists() and dest.stat().st_size>5000: return eid,str(dest),"cached"
@@ -218,8 +328,18 @@ def fetch_one(row):
                         dest.write_bytes(r.content); Image.open(dest).verify()
                         return eid,str(dest),label
                 except Exception: dest.unlink(missing_ok=True)
+    if platform=="Nintendo Switch":
+        for url,label in switch_candidates(row):
+            try:
+                r=S.get(url,timeout=18)
+                if r.status_code==200 and r.headers.get("content-type","").startswith("image") and len(r.content)>4000:
+                    dest.write_bytes(r.content); Image.open(dest).verify()
+                    return eid,str(dest),label
+            except Exception: dest.unlink(missing_ok=True)
     for d in DIR_MAP.get(platform,[]):
-        for name in preferred_names(row,d):
+        names=list(preferred_names(row,d))
+        if not names: names=list(fuzzy_names(row,d) or [])
+        for name in names:
             url=BASE+"/"+urllib.parse.quote(d,safe="")+"/Named_Boxarts/"+urllib.parse.quote(name,safe="")
             try:
                 r=S.get(url,timeout=20)
@@ -330,6 +450,7 @@ def main():
         rd=csv.DictReader(f)
         for r in rd:
             if not r.get("entry_id") and r.get("index")=="index": continue
+            apply_platform_correction(r)
             rows.append(r)
     print("entries",len(rows),flush=True)
     dirs=sorted({d for r in rows for d in DIR_MAP.get(r.get("platform",""),[])})
