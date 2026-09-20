@@ -246,7 +246,28 @@ def ps3_candidates(row):
                 if " = " in line:
                     gid,title=line.split(" = ",1)
                     PS3_MAP.setdefault(normkey(title),[]).append(gid.strip())
-        except Exception: pass
+        except Exception:
+            pass
+        # Reliable fallback title/serial index from GameDB-PS3 release assets.
+        try:
+            data=S.get("https://github.com/niemasd/GameDB-PS3/releases/latest/download/PS3.titles.json",timeout=45).json()
+            if isinstance(data,dict):
+                for gid,title in data.items():
+                    if isinstance(title,str):
+                        PS3_MAP.setdefault(normkey(title),[]).append(str(gid).replace("-",""))
+                    elif isinstance(title,list):
+                        for t in title:
+                            if isinstance(t,str):
+                                PS3_MAP.setdefault(normkey(t),[]).append(str(gid).replace("-",""))
+            elif isinstance(data,list):
+                for item in data:
+                    if not isinstance(item,dict): continue
+                    gid=str(item.get("serial") or item.get("id") or item.get("product_code") or "").replace("-","")
+                    title=item.get("title") or item.get("name")
+                    if gid and isinstance(title,str):
+                        PS3_MAP.setdefault(normkey(title),[]).append(gid)
+        except Exception:
+            pass
     keys=[]
     for t in variants(row):
         k=normkey(t)
@@ -272,12 +293,23 @@ def x360_candidates(row):
     global X360_MAP
     if X360_MAP is None:
         X360_MAP={}
-        try:
-            arr=S.get("https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json",timeout=30).json()
-            for g in arr:
-                if g.get("boxart"):
-                    X360_MAP.setdefault(normkey(g.get("title","")),[]).append(g)
-        except Exception: pass
+        arr=[]
+        for dburl in (
+            "https://xenia-manager.github.io/x360db/games.json",
+            "https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json",
+        ):
+            try:
+                data=S.get(dburl,timeout=45).json()
+                if isinstance(data,list):
+                    arr=data; break
+                if isinstance(data,dict):
+                    arr=data.get("games") or data.get("titles") or []
+                    if isinstance(arr,list) and arr: break
+            except Exception:
+                continue
+        for g in arr:
+            if isinstance(g,dict):
+                X360_MAP.setdefault(normkey(g.get("title","")),[]).append(g)
     keys=[]
     for t in variants(row):
         k=normkey(t)
