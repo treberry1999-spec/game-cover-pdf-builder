@@ -14,7 +14,8 @@ OUT=ROOT/"output"; COVERS=ROOT/"covers"; CONSOLES=ROOT/"console_images"
 OUT.mkdir(exist_ok=True); COVERS.mkdir(exist_ok=True); CONSOLES.mkdir(exist_ok=True)
 
 DIR_MAP={
-"Fairchild Channel F":["Fairchild - Channel F"],\n"Atari 2600":["Atari - 2600"],
+"Fairchild Channel F":["Fairchild - Channel F"],
+"Atari 2600":["Atari - 2600"],
 "Vectrex":["GCE - Vectrex"],
 "ColecoVision":["Coleco - ColecoVision"],
 "Nintendo Entertainment System":["Nintendo - Nintendo Entertainment System"],
@@ -45,7 +46,8 @@ DIR_MAP={
 "PlayStation 4":["Sony - PlayStation 4"]
 }
 SKIP_PLATFORMS={"Magnavox Odyssey","Platform Not Specified","TBA","PlayStation 5","Nintendo Switch 2"}
-ALIASES={\n"Sonic 1":"Sonic the Hedgehog","Sonic 2":"Sonic the Hedgehog 2","Golden Axe 2":"Golden Axe II","The Simpsons: Bart vs Space Mutants":"The Simpsons: Bart vs. the Space Mutants",
+ALIASES={
+"Sonic 1":"Sonic the Hedgehog","Sonic 2":"Sonic the Hedgehog 2","Golden Axe 2":"Golden Axe II","The Simpsons: Bart vs Space Mutants":"The Simpsons: Bart vs. the Space Mutants",
 "Dr Robotonik":"Dr. Robotnik's Mean Bean Machine","Musha":"M.U.S.H.A.",
 "MGS2":"Metal Gear Solid 2 - Sons of Liberty","MGS3":"Metal Gear Solid 3 - Snake Eater",
 "DMC 1":"Devil May Cry","DMC 2":"Devil May Cry 2","DMC 3":"Devil May Cry 3 - Dante's Awakening",
