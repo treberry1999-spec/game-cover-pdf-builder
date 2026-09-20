@@ -37,11 +37,11 @@ jobs:
         run: python builder.py
       - name: List output
         run: ls -lh output && cat output/build_summary.json
-      - name: Upload 2000s PDF
+      - name: Upload restored 1970s-1980s sections
         uses: actions/upload-artifact@v4
         with:
-          name: game-cover-2000s
-          path: output/2000s.pdf
+          name: game-cover-1970s-1980s-restored
+          path: output/1970s-1980s.pdf
           if-no-files-found: error
           retention-days: 7
       - name: Upload build audit
