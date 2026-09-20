@@ -27,6 +27,8 @@ jobs:
         run: |
           curl -L --fail --retry 3 -A "Mozilla/5.0" https://raw.githubusercontent.com/xenia-manager/x360db/main/games.json -o x360db_games.json
           git clone --depth 1 https://github.com/niemasd/GameDB-PS3.git ps3db
+          git clone --depth 1 https://github.com/bobelmasry/database_project.git moby_source
+          cp -r moby_source/game_pages moby_pages
           curl -L --fail --retry 3 -A "Mozilla/5.0" 'https://www.gametdb.com/switchtdb.txt?LANG=EN' -o switchtdb.txt || true
           curl -L --fail --retry 3 -A "Mozilla/5.0" 'https://www.gametdb.com/ps3tdb.txt?LANG=EN' -o ps3tdb.txt || true
           ls -lh x360db_games.json switchtdb.txt ps3tdb.txt 2>/dev/null || true
@@ -35,10 +37,26 @@ jobs:
         run: python builder.py
       - name: List output
         run: ls -lh output && cat output/build_summary.json
-      - name: Upload PDFs
+      - name: Upload 2000s PDF
         uses: actions/upload-artifact@v4
         with:
-          name: game-cover-pdfs
-          path: output/
+          name: game-cover-2000s
+          path: output/2000s.pdf
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload 2010s-2020s PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-cover-2010s-2020s
+          path: output/2010s-2020s.pdf
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload build audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-cover-build-audit
+          path: |
+            output/build_summary.json
+            output/resolved_sources.csv
           if-no-files-found: error
           retention-days: 7
