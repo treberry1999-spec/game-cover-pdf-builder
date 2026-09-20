@@ -678,6 +678,7 @@ def main():
             if not r.get("entry_id") and r.get("index")=="index": continue
             apply_platform_correction(r)
             rows.append(r)
+    rows=[r for r in rows if (r.get("decade") or "").replace("–","-")=="2000s"]
     print("entries",len(rows),flush=True)
     dirs=sorted({d for r in rows for d in DIR_MAP.get(r.get("platform",""),[])})
     print("loading",len(dirs),"system indexes",flush=True)
@@ -692,7 +693,7 @@ def main():
             eid,p,label=f.result(); done+=1
             if p: resolved[eid]=p; labels[eid]=label
             if done%50==0: print("resolved",done,"found",len(resolved),flush=True)
-    decades=["2000s","2010s-2020s"]
+    decades=["2000s"]
     summary={"entries":len(rows),"covers_found":len(resolved),"unresolved":len(rows)-len(resolved),"decades":{},"systems":{}}
     for d in decades:
         rr=[r for r in rows if (r.get("decade") or "").replace("–","-")==d]
