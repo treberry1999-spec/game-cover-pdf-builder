@@ -1,0 +1,35 @@
+name: Fetch 1990s addition covers
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'fetch_90s_additions.py'
+      - '.github/workflows/fetch90.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install requests
+      - name: Fetch official cover scans
+        run: python fetch_90s_additions.py
+      - name: List
+        run: ls -lh output/90s_additions
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-90s-addition-covers
+          path: output/90s_additions/
+          if-no-files-found: error
+          retention-days: 7
