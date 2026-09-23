@@ -1,0 +1,24 @@
+name: Fetch Source first 100 montage
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/fetch_source100_montage.py'
+      - '.github/workflows/fetch_source100.yml'
+permissions: {contents: read}
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests
+      - run: python magazines/fetch_source100_montage.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-first-100-montage
+          path: magazine_output/unkut_source100/
+          retention-days: 7
