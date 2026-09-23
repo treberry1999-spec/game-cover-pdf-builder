@@ -22,7 +22,7 @@ for a in s.find_all("a",href=True):
  txt=" ".join(a.stripped_strings)
  if "/products/" in href and href not in [x["url"] for x in links]:
   links.append({"url":href,"anchor":txt})
-print("PRODUCT LINKS",len(links))
+print("PRODUCT LINKS",len(links))\nopen("rapstyle_links.json","w").write(json.dumps(links,indent=2))\nprint("FIRST LINKS",json.dumps(links[:100],indent=2)[:30000])
 records=[]
 for i,x in enumerate(links):
  if not any(k in x["anchor"].lower() for k in ["source magazine","vibe magazine","xxl magazine"]):
