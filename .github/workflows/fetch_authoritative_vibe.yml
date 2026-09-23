@@ -1,0 +1,25 @@
+name: Fetch authoritative VIBE covers
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/fetch_authoritative_vibe.py'
+      - '.github/workflows/fetch_authoritative_vibe.yml'
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests beautifulsoup4 pillow
+      - run: python magazines/fetch_authoritative_vibe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: authoritative-vibe-covers
+          path: magazine_output/vibe_authoritative/
+          retention-days: 7
