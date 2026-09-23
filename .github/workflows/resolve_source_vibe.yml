@@ -1,0 +1,25 @@
+name: Resolve Source and VIBE covers
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/resolve_source_vibe.py'
+      - '.github/workflows/resolve_source_vibe.yml'
+permissions: {contents: read}
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests beautifulsoup4 pillow
+      - run: python magazines/resolve_source_vibe.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resolved-source-vibe
+          path: magazine_output/targeted/
+          retention-days: 7
