@@ -1,0 +1,25 @@
+name: Fetch exact Rapzines magazine covers
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/fetch_exact_rapzines.py'
+      - '.github/workflows/fetch_exact_rapzines.yml'
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests beautifulsoup4 pillow
+      - run: python magazines/fetch_exact_rapzines.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-rapzines-magazine-covers
+          path: magazine_output/rapzines_exact/
+          retention-days: 7
