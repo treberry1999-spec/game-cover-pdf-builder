@@ -1,0 +1,42 @@
+name: Build magazine cover catalog
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/build_magazine_catalog.py'
+      - '.github/workflows/build_magazines.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests beautifulsoup4 pillow reportlab
+      - name: Build 190-cover catalog
+        run: python magazines/build_magazine_catalog.py
+      - name: List outputs
+        if: always()
+        run: find magazine_output -maxdepth 2 -type f -printf '%p %s bytes\n' | sort | tail -n 260 || true
+      - name: Upload final PDF
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hip-hop-magazine-cover-master
+          path: magazine_output/Hip_Hop_Magazine_Cover_Master_190.pdf
+          retention-days: 7
+      - name: Upload audit and contacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hip-hop-magazine-cover-audit
+          path: |
+            magazine_output/audit.csv
+            magazine_output/unresolved.json
+            magazine_output/contact_*.jpg
+          if-no-files-found: ignore
+          retention-days: 7
