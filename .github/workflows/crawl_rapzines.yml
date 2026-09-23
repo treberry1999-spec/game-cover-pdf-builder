@@ -1,0 +1,26 @@
+name: Crawl Rapzines magazine products
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/crawl_rapzines.py'
+      - '.github/workflows/crawl_rapzines.yml'
+permissions:
+  contents: read
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests beautifulsoup4 pillow
+      - run: python magazines/crawl_rapzines.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rapzines-cover-crawl
+          path: magazine_output/rapzines_crawl/
+          retention-days: 7
