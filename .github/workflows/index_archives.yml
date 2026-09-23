@@ -1,0 +1,26 @@
+name: Index magazine archives
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/index_archives.py'
+      - '.github/workflows/index_archives.yml'
+permissions: {contents: read}
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests beautifulsoup4
+      - run: python magazines/index_archives.py > archive_index_log.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: magazine-archive-index
+          path: |
+            rapstyle_index.json
+            archive_index_log.txt
+          retention-days: 5
