@@ -1,0 +1,25 @@
+name: Crawl Rap Style Archeology
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/crawl_rapstyle.py'
+      - '.github/workflows/crawl_rapstyle.yml'
+permissions:
+  contents: read
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install requests pillow
+      - run: python magazines/crawl_rapstyle.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rapstyle-product-index
+          path: magazine_output/rapstyle_crawl/
+          retention-days: 7
