@@ -14,10 +14,10 @@ pages={
 "source_118":"https://rapstylearcheology.com/products/july-1999",
 "source_121":"https://rapstylearcheology.com/products/october-1999",
 "source_123":"https://rapstylearcheology.com/products/december-1999",
-"source_127":"https://www.originalmagazines.com/products/the-source-magazine-april-2000-ice-cube-snoop-dogg-and-dr-dre-no-label",
 }
 direct={
 "source_116":"https://i.ebayimg.com/images/g/mCYAAOSwtAxktDxZ/s-l1600.webp",
+"source_127":"https://i.ebayimg.com/images/g/REMAAOSwLOdjNf75/s-l1600.webp",
 }
 
 def urls_from_page(url):
