@@ -1,0 +1,25 @@
+name: Fetch final missing Source covers
+on:
+  push:
+    branches: [ magazine-finalize ]
+    paths:
+      - 'magazines/fetch_final_missing_source.py'
+      - '.github/workflows/fetch_final_missing_source.yml'
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests beautifulsoup4 pillow
+      - run: python magazines/fetch_final_missing_source.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-missing-source
+          path: final_missing_source/
+          retention-days: 7
