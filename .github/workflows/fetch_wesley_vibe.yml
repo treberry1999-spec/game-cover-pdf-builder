@@ -1,0 +1,24 @@
+name: Fetch Wesley Vibe cover
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'magazines/fetch_wesley_vibe.py'
+      - '.github/workflows/fetch_wesley_vibe.yml'
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests
+      - run: python magazines/fetch_wesley_vibe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vibe-wesley-cover
+          path: vibe_wesley_1993.jpg
+          retention-days: 7
